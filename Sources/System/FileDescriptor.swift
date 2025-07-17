@@ -39,6 +39,18 @@ extension FileDescriptor {
   /// The standard error file descriptor, with a numeric value of 2.
   @_alwaysEmitIntoClient
   public static var standardError: FileDescriptor { .init(rawValue: 2) }
+
+  #if !os(Windows)
+  /// A file descriptor representing the current working directory
+  /// for the `at` family of system calls.
+  ///
+  /// The corresponding C constant is `AT_FDCWD`.
+  /// - Warning: Not all system calls that take file descriptors support `AT_FDCWD`.
+  ///   This constant should only be used in methods corresponding to an `at` system
+  ///   call, such as `fstatat()`.
+  @_alwaysEmitIntoClient
+  public static var currentWorkingDirectory: FileDescriptor { .init(rawValue: _AT_FDCWD) }
+  #endif
 }
 
 @available(System 0.0.1, *)

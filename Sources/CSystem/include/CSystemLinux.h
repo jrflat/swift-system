@@ -8,6 +8,9 @@
 */
 
 #ifdef __linux__
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
