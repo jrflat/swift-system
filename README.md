@@ -32,7 +32,7 @@ To use the `SystemPackage` library in a SwiftPM project,
 add the following line to the dependencies in your `Package.swift` file:
 
 ```swift
-.package(url: "https://github.com/apple/swift-system", from: "1.6.1"),
+.package(url: "https://github.com/apple/swift-system", from: "1.6.2"),
 ```
 
 Finally, include `"SystemPackage"` as a dependency for your executable target:
@@ -41,7 +41,7 @@ Finally, include `"SystemPackage"` as a dependency for your executable target:
 let package = Package(
     // name, platforms, products, etc.
     dependencies: [
-        .package(url: "https://github.com/apple/swift-system", from: "1.6.1"),
+        .package(url: "https://github.com/apple/swift-system", from: "1.6.2"),
         // other dependencies
     ],
     targets: [
