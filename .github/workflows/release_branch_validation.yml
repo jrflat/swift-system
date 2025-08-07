@@ -2,13 +2,11 @@ name: Release Branch Validation
 
 on:
   push:
-    branches:
-      - 'release/*'
 
   pull_request:
     branches:
       - 'release/*'
-    types: [closed]  # Includes both merged and closed PRs, but restricted to merged PRs below
+    types: [opened, synchronize, closed]  # Includes both merged and closed PRs, but restricted to merged PRs below
 
   workflow_dispatch:
     inputs:
