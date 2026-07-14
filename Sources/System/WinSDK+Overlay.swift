@@ -112,6 +112,16 @@ internal var ERROR_FILE_NOT_FOUND: DWORD {
 }
 
 @_transparent
+internal var ERROR_HANDLE_EOF: DWORD {
+  DWORD(WinSDK.ERROR_HANDLE_EOF)
+}
+
+@_transparent
+internal var ERROR_MORE_DATA: DWORD {
+  DWORD(WinSDK.ERROR_MORE_DATA)
+}
+
+@_transparent
 internal var ERROR_FAIL_I24: DWORD {
   DWORD(WinSDK.ERROR_FAIL_I24)
 }

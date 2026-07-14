@@ -199,6 +199,86 @@ internal func pwrite(
   return Int(nNumberOfBytesWritten)
 }
 
+/// Retrieve the Win32 file `HANDLE` backing a C runtime file descriptor.
+///
+/// The returned handle is non-owning: it's owned by the C runtime file
+/// descriptor and must **not** be passed to `CloseHandle`.
+///
+/// - Returns: The backing handle, or `nil` if `fd` is not a valid open file
+///   descriptor. On failure, `errno` is set to `EBADF`.
+@inline(__always)
+internal func _handle(fromFileDescriptor fd: Int32) -> HANDLE? {
+  // A negative descriptor would trip the CRT invalid-parameter handler
+  // (generally terminating the process) instead of returning an error.
+  // Guard it so a bad descriptor surfaces as `EBADF`.
+  if fd < 0 {
+    ucrt._set_errno(EBADF)
+    return nil
+  }
+  let handle: intptr_t = _get_osfhandle(fd)
+  if handle == /* INVALID_HANDLE_VALUE */ -1 || handle == -2 {
+    ucrt._set_errno(EBADF)
+    return nil
+  }
+  // NOTE: this is a non-owning handle, do *not* call CloseHandle on it
+  return HANDLE(bitPattern: handle)
+}
+
+/// Retrieve fixed-size file information for a C runtime file descriptor.
+///
+/// This is a wrapper around the Windows `GetFileInformationByHandleEx`.
+/// `buffer` receives the requested struct. On failure, `errno` is set (via
+/// `_mapWindowsErrorToErrno`) and the function returns `false`.
+@inline(__always)
+internal func system_getFileInformationByHandleEx(
+  _ fd: Int32,
+  _ infoClass: FILE_INFO_BY_HANDLE_CLASS,
+  _ buffer: UnsafeMutableRawBufferPointer
+) -> Bool {
+  guard let handle = _handle(fromFileDescriptor: fd) else {
+    return false
+  }
+  // Windows takes the buffer size as a DWORD (32-bit).
+  guard buffer.count <= Int(DWORD.max) else {
+    ucrt._set_errno(EINVAL)
+    return false
+  }
+  if !GetFileInformationByHandleEx(
+    handle, infoClass, buffer.baseAddress, DWORD(buffer.count)
+  ) {
+    ucrt._set_errno(_mapWindowsErrorToErrno(GetLastError()))
+    return false
+  }
+  return true
+}
+
+/// Retrieve variable-length file information, surfacing the raw Windows error.
+///
+/// Unlike ``system_getFileInformationByHandleEx``, this returns the Win32
+/// error code directly (e.g. `ERROR_SUCCESS` on success) rather than mapping
+/// to `errno`. This lets callers distinguish `ERROR_MORE_DATA`, which signals
+/// that `buffer` was too small and must grow before retrying, a pattern that's
+/// required for the variable-length classes such as `FileNameInfo`.
+@inline(__always)
+internal func system_getFileInformationByHandleEx_error(
+  _ fd: Int32,
+  _ infoClass: FILE_INFO_BY_HANDLE_CLASS,
+  _ buffer: UnsafeMutableRawBufferPointer
+) -> DWORD {
+  guard let handle = _handle(fromFileDescriptor: fd) else {
+    return ERROR_INVALID_HANDLE
+  }
+  guard buffer.count <= Int(DWORD.max) else {
+    return ERROR_INVALID_PARAMETER
+  }
+  if !GetFileInformationByHandleEx(
+    handle, infoClass, buffer.baseAddress, DWORD(buffer.count)
+  ) {
+    return GetLastError()
+  }
+  return DWORD(ERROR_SUCCESS)
+}
+
 @inline(__always)
 internal func pipe(
   _ fds: UnsafeMutablePointer<Int32>, bytesReserved: UInt32 = 0
