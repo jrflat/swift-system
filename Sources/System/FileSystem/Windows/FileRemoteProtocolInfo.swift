@@ -102,8 +102,7 @@ public struct FileRemoteProtocolInfo: RawRepresentable, Sendable {
     return SMB2(
       serverCapabilities: raw.Server.Capabilities,
       shareCapabilities: raw.Share.Capabilities,
-      shareFlags: raw.Share.ShareFlags,
-      shareCachingFlags: raw.Share.CachingFlags)
+      shareFlags: raw.Share.ShareFlags)
   }
 
   /// Flags for a ``FileRemoteProtocolInfo`` value.
@@ -182,31 +181,26 @@ public struct FileRemoteProtocolInfo: RawRepresentable, Sendable {
     @_alwaysEmitIntoClient
     public var shareCapabilities: UInt32
 
-    /// The share's flags.
+    /// The share's flags, including its caching mode.
+    ///
+    /// MS-SMB2 carries the caching mode in these bits — `SHAREFLAG_*_CACHING`
+    /// — rather than in a field of its own, so there is no separate caching
+    /// member to report.
     ///
     /// The corresponding C member is `ProtocolSpecific.Smb2.Share.ShareFlags`.
     @_alwaysEmitIntoClient
     public var shareFlags: UInt32
-
-    /// The share's caching flags.
-    ///
-    /// The corresponding C member is
-    /// `ProtocolSpecific.Smb2.Share.CachingFlags`.
-    @_alwaysEmitIntoClient
-    public var shareCachingFlags: UInt32
 
     /// Creates SMB2 information from its constituent bitmasks.
     @_alwaysEmitIntoClient
     public init(
       serverCapabilities: UInt32,
       shareCapabilities: UInt32,
-      shareFlags: UInt32,
-      shareCachingFlags: UInt32
+      shareFlags: UInt32
     ) {
       self.serverCapabilities = serverCapabilities
       self.shareCapabilities = shareCapabilities
       self.shareFlags = shareFlags
-      self.shareCachingFlags = shareCachingFlags
     }
   }
 }
