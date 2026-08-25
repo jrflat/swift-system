@@ -66,21 +66,24 @@ private struct GetFileInformationByHandleExTests {
     _ body: (FileDescriptor) throws -> Void
   ) throws {
     let handle: HANDLE? = path.withPlatformString { wide in
-      // These constants come from the package's own WinSDK overlay, so they are
-      // already DWORD and need no conversion.
+      // Qualified with `WinSDK.`: the package's own overlay declares DWORD
+      // versions of these names, and `@testable import` makes both visible.
       CreateFileW(
         wide,
-        GENERIC_READ,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        DWORD(WinSDK.GENERIC_READ),
+        DWORD(WinSDK.FILE_SHARE_READ)
+          | DWORD(WinSDK.FILE_SHARE_WRITE)
+          | DWORD(WinSDK.FILE_SHARE_DELETE),
         nil,
-        OPEN_EXISTING,
+        DWORD(WinSDK.OPEN_EXISTING),
         DWORD(WinSDK.FILE_FLAG_BACKUP_SEMANTICS),
         nil)
     }
     let raw = intptr_t(bitPattern: handle)
     try #require(raw != -1, "could not open directory \(path)")
 
-    let descriptor = FileDescriptor(rawValue: _open_osfhandle(raw, _O_RDONLY))
+    let descriptor = FileDescriptor(
+      rawValue: _open_osfhandle(raw, ucrt._O_RDONLY))
     guard descriptor.rawValue >= 0 else {
       CloseHandle(handle)
       Issue.record("could not wrap directory handle for \(path)")
@@ -100,10 +103,10 @@ private struct GetFileInformationByHandleExTests {
     let handle: HANDLE? = streamPath.withCString(encodedAs: UTF16.self) { wide in
       CreateFileW(
         wide,
-        GENERIC_WRITE,
-        FILE_SHARE_READ,
+        DWORD(WinSDK.GENERIC_WRITE),
+        DWORD(WinSDK.FILE_SHARE_READ),
         nil,
-        CREATE_ALWAYS,
+        DWORD(WinSDK.CREATE_ALWAYS),
         0,
         nil)
     }
@@ -114,9 +117,10 @@ private struct GetFileInformationByHandleExTests {
 
     let bytes = Array(contents.utf8)
     var written: DWORD = 0
-    bytes.withUnsafeBufferPointer { buffer in
-      _ = WriteFile(
-        handle, buffer.baseAddress, DWORD(buffer.count), &written, nil)
+    bytes.withUnsafeBytes { raw in
+      // `withUnsafeBytes` rather than `withUnsafeBufferPointer`: its
+      // `baseAddress` is already the `UnsafeRawPointer?` that `LPCVOID` wants.
+      _ = WriteFile(handle, raw.baseAddress, DWORD(raw.count), &written, nil)
     }
     #expect(written == DWORD(bytes.count))
   }
@@ -386,7 +390,8 @@ private struct GetFileInformationByHandleExTests {
       try withDirectoryDescriptor(at: dir) { fd in
         // A directory has no data streams. Windows says so with
         // ERROR_HANDLE_EOF, which is an absence rather than a failure.
-        #expect(try fd.dataStreams().isEmpty)
+        let streams = try fd.dataStreams()
+        #expect(streams.isEmpty)
       }
     }
   }
@@ -608,10 +613,12 @@ private struct GetFileInformationByHandleExTests {
       try withDirectoryDescriptor(at: dir) { fd in
         // The three classes disagree about extras but agree about the common
         // members, which is what the protocol lets callers rely on.
-        #expect(try names(in: fd, as: FileFullDirectoryEntry.self) == ["a.txt"])
-        #expect(try names(in: fd, as: FileIDBothDirectoryEntry.self) == ["a.txt"])
-        #expect(
-          try names(in: fd, as: FileIDExtendedDirectoryEntry.self) == ["a.txt"])
+        let full = try names(in: fd, as: FileFullDirectoryEntry.self)
+        let both = try names(in: fd, as: FileIDBothDirectoryEntry.self)
+        let extended = try names(in: fd, as: FileIDExtendedDirectoryEntry.self)
+        #expect(full == ["a.txt"])
+        #expect(both == ["a.txt"])
+        #expect(extended == ["a.txt"])
       }
     }
   }
