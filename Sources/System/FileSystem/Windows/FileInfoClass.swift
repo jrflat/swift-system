@@ -15,10 +15,18 @@ import WinSDK
 
 // MARK: - FileInfoClass
 
-/// Identifies the type of file information retrieved by
-/// ``FileDescriptor/fileInformation(_:)``
+/// Identifies the type of file information to retrieve from a file handle.
 ///
-/// This is a wrapper around the C `FILE_INFO_BY_HANDLE_CLASS` enumeration.
+/// This is a wrapper around the C `FILE_INFO_BY_HANDLE_CLASS` enumeration,
+/// limited to the classes that retrieve information. The classes that only
+/// set information are not included.
+///
+/// You rarely need this type: each class has a dedicated API that names it, and
+/// which you should prefer. The fixed-size classes are retrieved by requesting
+/// their ``FileInfoByHandle`` type from ``FileDescriptor/fileInformation(_:)``;
+/// the rest are listed on the cases below. It is here for
+/// ``FileDescriptor/withUnsafeFileInformation(_:minimumCapacity:maximumCapacity:_:)``,
+/// the escape hatch for classes this library does not model.
 ///
 /// - Note: Only available on Windows.
 @frozen
@@ -44,6 +52,30 @@ public struct FileInfoClass: RawRepresentable, Sendable, Hashable {
   @_alwaysEmitIntoClient
   public static var standard: FileInfoClass { FileInfoClass(rawValue: WinSDK.FileStandardInfo) }
 
+  /// The file's name, as opened. Retrieved by
+  /// ``FileDescriptor/fileName(normalized:)``.
+  ///
+  /// The corresponding C constant is `FileNameInfo`.
+  @_alwaysEmitIntoClient
+  public static var name: FileInfoClass { FileInfoClass(rawValue: WinSDK.FileNameInfo) }
+
+  /// The file's fully resolved name. Retrieved by
+  /// ``FileDescriptor/fileName(normalized:)``.
+  ///
+  /// The corresponding C constant is `FileNormalizedNameInfo`.
+  @_alwaysEmitIntoClient
+  public static var normalizedName: FileInfoClass {
+    FileInfoClass(rawValue: WinSDK.FileNormalizedNameInfo)
+  }
+
+  /// The file's data streams, as a chain of `FILE_STREAM_INFO` entries.
+  /// Retrieved by ``FileDescriptor/dataStreams()``, which decodes them into
+  /// ``FileStreamInfo`` values.
+  ///
+  /// The corresponding C constant is `FileStreamInfo`.
+  @_alwaysEmitIntoClient
+  public static var stream: FileInfoClass { FileInfoClass(rawValue: WinSDK.FileStreamInfo) }
+
   /// Compression information. Selects ``FileCompressionInfo``.
   ///
   /// The corresponding C constant is `FileCompressionInfo`.
@@ -55,6 +87,59 @@ public struct FileInfoClass: RawRepresentable, Sendable, Hashable {
   /// The corresponding C constant is `FileAttributeTagInfo`.
   @_alwaysEmitIntoClient
   public static var attributeTag: FileInfoClass { FileInfoClass(rawValue: WinSDK.FileAttributeTagInfo) }
+
+  /// Directory entries with 64-bit file IDs and short names, as a chain of
+  /// `FILE_ID_BOTH_DIR_INFO` entries. Selects ``FileIDBothDirectoryEntry``.
+  ///
+  /// Requires a directory handle. Enumerate with
+  /// ``FileDescriptor/withDirectoryEntries(_:bufferSize:_:)``, which drives this
+  /// class and ``idBothDirectoryRestart`` together.
+  ///
+  /// The corresponding C constant is `FileIdBothDirectoryInfo`.
+  @_alwaysEmitIntoClient
+  public static var idBothDirectory: FileInfoClass {
+    FileInfoClass(rawValue: WinSDK.FileIdBothDirectoryInfo)
+  }
+
+  /// Like ``idBothDirectory``, but restarts the enumeration from the beginning.
+  ///
+  /// The corresponding C constant is `FileIdBothDirectoryRestartInfo`.
+  @_alwaysEmitIntoClient
+  public static var idBothDirectoryRestart: FileInfoClass {
+    FileInfoClass(rawValue: WinSDK.FileIdBothDirectoryRestartInfo)
+  }
+
+  /// Information about the remote protocol serving the file. Selects
+  /// ``FileRemoteProtocolInfo``.
+  ///
+  /// The corresponding C constant is `FileRemoteProtocolInfo`.
+  @_alwaysEmitIntoClient
+  public static var remoteProtocol: FileInfoClass {
+    FileInfoClass(rawValue: WinSDK.FileRemoteProtocolInfo)
+  }
+
+  /// Directory entries, as a chain of `FILE_FULL_DIR_INFO` entries. Selects
+  /// ``FileFullDirectoryEntry``.
+  ///
+  /// This is a subset of ``idBothDirectory`` and is faster, because it reads
+  /// only the directory entry rather than also consulting the master file
+  /// table. Requires a directory handle. Enumerate with
+  /// ``FileDescriptor/withDirectoryEntries(_:bufferSize:_:)``, which drives this
+  /// class and ``fullDirectoryRestart`` together.
+  ///
+  /// The corresponding C constant is `FileFullDirectoryInfo`.
+  @_alwaysEmitIntoClient
+  public static var fullDirectory: FileInfoClass {
+    FileInfoClass(rawValue: WinSDK.FileFullDirectoryInfo)
+  }
+
+  /// Like ``fullDirectory``, but restarts the enumeration from the beginning.
+  ///
+  /// The corresponding C constant is `FileFullDirectoryRestartInfo`.
+  @_alwaysEmitIntoClient
+  public static var fullDirectoryRestart: FileInfoClass {
+    FileInfoClass(rawValue: WinSDK.FileFullDirectoryRestartInfo)
+  }
 
   /// Storage-alignment information. Selects ``FileStorageInfo``.
   ///
@@ -73,6 +158,66 @@ public struct FileInfoClass: RawRepresentable, Sendable, Hashable {
   /// The corresponding C constant is `FileIdInfo`.
   @_alwaysEmitIntoClient
   public static var id: FileInfoClass { FileInfoClass(rawValue: WinSDK.FileIdInfo) }
+
+  /// Directory entries with 128-bit file IDs and reparse tags, as a chain of
+  /// `FILE_ID_EXTD_DIR_INFO` entries. Selects
+  /// ``FileIDExtendedDirectoryEntry``.
+  ///
+  /// Requires a directory handle. Enumerate with
+  /// ``FileDescriptor/withDirectoryEntries(_:bufferSize:_:)``, which drives this
+  /// class and ``idExtendedDirectoryRestart`` together.
+  ///
+  /// The corresponding C constant is `FileIdExtdDirectoryInfo`.
+  @_alwaysEmitIntoClient
+  public static var idExtendedDirectory: FileInfoClass {
+    FileInfoClass(rawValue: WinSDK.FileIdExtdDirectoryInfo)
+  }
+
+  /// Like ``idExtendedDirectory``, but restarts the enumeration from the
+  /// beginning.
+  ///
+  /// The corresponding C constant is `FileIdExtdDirectoryRestartInfo`.
+  @_alwaysEmitIntoClient
+  public static var idExtendedDirectoryRestart: FileInfoClass {
+    FileInfoClass(rawValue: WinSDK.FileIdExtdDirectoryRestartInfo)
+  }
+
+  /// Per-directory case sensitivity. Selects ``FileCaseSensitiveInfo``.
+  ///
+  /// The corresponding C constant is `FileCaseSensitiveInfo`.
+  @_alwaysEmitIntoClient
+  public static var caseSensitive: FileInfoClass {
+    FileInfoClass(rawValue: WinSDK.FileCaseSensitiveInfo)
+  }
+}
+
+@available(System 99, *)
+extension FileInfoClass: CustomStringConvertible {
+  /// A textual representation of the info class.
+  @inline(never)
+  public var description: String {
+    switch self {
+    case .basic: return "basic"
+    case .standard: return "standard"
+    case .name: return "name"
+    case .normalizedName: return "normalizedName"
+    case .stream: return "stream"
+    case .compression: return "compression"
+    case .attributeTag: return "attributeTag"
+    case .idBothDirectory: return "idBothDirectory"
+    case .idBothDirectoryRestart: return "idBothDirectoryRestart"
+    case .remoteProtocol: return "remoteProtocol"
+    case .fullDirectory: return "fullDirectory"
+    case .fullDirectoryRestart: return "fullDirectoryRestart"
+    case .storage: return "storage"
+    case .alignment: return "alignment"
+    case .id: return "id"
+    case .idExtendedDirectory: return "idExtendedDirectory"
+    case .idExtendedDirectoryRestart: return "idExtendedDirectoryRestart"
+    case .caseSensitive: return "caseSensitive"
+    default: return "FileInfoClass(rawValue: \(rawValue.rawValue))"
+    }
+  }
 }
 
 // MARK: - FileBasicInfo
@@ -166,6 +311,9 @@ public struct FileStandardInfo: RawRepresentable, Sendable {
 
   /// The number of bytes allocated for the file on disk.
   ///
+  /// This is usually a multiple of the sector or cluster size of the
+  /// underlying device.
+  ///
   /// The corresponding C member is `AllocationSize`.
   @_alwaysEmitIntoClient
   public var allocationSize: Int64 {
@@ -222,8 +370,12 @@ public struct FileStandardInfo: RawRepresentable, Sendable {
 /// file identifier.
 ///
 /// The identifier and volume serial number together uniquely identify a file
-/// on a single computer. This is a Swift wrapper of the C `FILE_ID_INFO`
-/// struct, retrieved by ``FileDescriptor/fileInformation(_:)``.
+/// on a single computer at a single point in time. This is a Swift wrapper of
+/// the C `FILE_ID_INFO` struct, retrieved by
+/// ``FileDescriptor/fileInformation(_:)``.
+///
+/// Prefer this over the 64-bit index reported by `GetFileInformationByHandle`,
+/// which is not guaranteed to be unique on ReFS.
 ///
 /// - Note: Only available on Windows.
 @frozen
@@ -246,6 +398,17 @@ public struct FileIDInfo: RawRepresentable, Sendable {
   }
 
   /// The 128-bit file identifier.
+  ///
+  /// To determine whether two open handles refer to the same file, compare
+  /// both this and ``volumeSerialNumber``.
+  ///
+  /// - Important: File identifiers are unique only within a static file
+  ///   system. They are not stable over time: file systems are free to reuse
+  ///   an identifier once its file is deleted, and some can change the
+  ///   identifier of a live file. On FAT, for instance, the identifier is
+  ///   derived from the byte offset of the file's directory entry, which
+  ///   defragmentation and lengthening renames can both move. Do not persist
+  ///   an identifier and expect it to name the same file later.
   ///
   /// The corresponding C member is `FileId`.
   @_alwaysEmitIntoClient
@@ -281,13 +444,14 @@ public struct FileAttributeTagInfo: RawRepresentable, Sendable {
     FileAttributes(rawValue: rawValue.FileAttributes)
   }
 
-  /// The reparse tag, meaningful only when ``attributes`` contains
-  /// ``FileAttributes/reparsePoint``.
+  /// The reparse tag, or `nil` if the file is not a reparse point.
   ///
-  /// The corresponding C member is `ReparseTag`.
+  /// The corresponding C member is `ReparseTag`, which is undefined unless
+  /// ``attributes`` contains ``FileAttributes/reparsePoint``.
   @_alwaysEmitIntoClient
-  public var reparseTag: UInt32 {
-    rawValue.ReparseTag
+  public var reparseTag: ReparseTag? {
+    guard attributes.contains(.reparsePoint) else { return nil }
+    return ReparseTag(rawValue: rawValue.ReparseTag)
   }
 }
 
@@ -297,6 +461,10 @@ public struct FileAttributeTagInfo: RawRepresentable, Sendable {
 ///
 /// This is a Swift wrapper of the C `FILE_STORAGE_INFO` struct, retrieved by
 /// ``FileDescriptor/fileInformation(_:)``.
+///
+/// On a volume built from several devices, such as a mirrored, spanned,
+/// striped, or RAID configuration, the reported sizes are those of the largest
+/// underlying device.
 ///
 /// - Note: Only available on Windows.
 @frozen
@@ -407,7 +575,7 @@ public struct FileStorageInfo: RawRepresentable, Sendable {
 
 // MARK: - FileAlignmentInfo
 
-/// The minimum buffer-alignment requirement, in bytes, for the file.
+/// The buffer-alignment requirement for the file.
 ///
 /// This is a Swift wrapper of the C `FILE_ALIGNMENT_INFO` struct, retrieved
 /// by ``FileDescriptor/fileInformation(_:)``.
@@ -424,12 +592,22 @@ public struct FileAlignmentInfo: RawRepresentable, Sendable {
   @_alwaysEmitIntoClient
   public init(rawValue: FILE_ALIGNMENT_INFO) { self.rawValue = rawValue }
 
-  /// The minimum alignment requirement, in bytes.
+  /// The alignment requirement as a bit mask: one less than ``alignment``.
+  /// Zero means there is no requirement.
   ///
-  /// The corresponding C member is `AlignmentRequirement`.
+  /// The corresponding C member is `AlignmentRequirement`. Note that although
+  /// Windows documents it as a byte count, its `FILE_*_ALIGNMENT` values are
+  /// masks: `FILE_LONG_ALIGNMENT`, for example, is 3 rather than 4.
   @_alwaysEmitIntoClient
   public var alignmentRequirement: UInt32 {
     rawValue.AlignmentRequirement
+  }
+
+  /// The required buffer alignment, in bytes. A value of 1 means buffers may
+  /// be placed at any address.
+  @_alwaysEmitIntoClient
+  public var alignment: Int {
+    Int(alignmentRequirement) + 1
   }
 }
 
@@ -464,8 +642,8 @@ public struct FileCompressionInfo: RawRepresentable, Sendable {
   ///
   /// The corresponding C member is `CompressionFormat`.
   @_alwaysEmitIntoClient
-  public var compressionFormat: UInt16 {
-    rawValue.CompressionFormat
+  public var compressionFormat: CompressionFormat {
+    CompressionFormat(rawValue: rawValue.CompressionFormat)
   }
 
   /// The compression unit shift factor.
@@ -490,6 +668,60 @@ public struct FileCompressionInfo: RawRepresentable, Sendable {
   @_alwaysEmitIntoClient
   public var clusterShift: UInt8 {
     rawValue.ClusterShift
+  }
+}
+
+// MARK: - FileCaseSensitiveInfo
+
+/// The per-directory case-sensitivity state of a directory.
+///
+/// This is a Swift wrapper of the C `FILE_CASE_SENSITIVE_INFO` struct,
+/// retrieved by ``FileDescriptor/fileInformation(_:)``. It requires a
+/// directory handle.
+///
+/// - Note: Only available on Windows.
+@frozen
+@available(System 99, *)
+public struct FileCaseSensitiveInfo: RawRepresentable, Sendable {
+  /// The raw C `FILE_CASE_SENSITIVE_INFO` struct.
+  @_alwaysEmitIntoClient
+  public var rawValue: FILE_CASE_SENSITIVE_INFO
+
+  /// Creates a Swift `FileCaseSensitiveInfo` from the raw C struct.
+  @_alwaysEmitIntoClient
+  public init(rawValue: FILE_CASE_SENSITIVE_INFO) { self.rawValue = rawValue }
+
+  /// The case-sensitivity flags.
+  ///
+  /// The corresponding C member is `Flags`.
+  @_alwaysEmitIntoClient
+  public var flags: Flags {
+    Flags(rawValue: rawValue.Flags)
+  }
+
+  /// Whether name lookup in the directory is case-sensitive. Directories are
+  /// case-insensitive by default.
+  @_alwaysEmitIntoClient
+  public var isCaseSensitive: Bool {
+    flags.contains(.caseSensitiveDirectory)
+  }
+
+  /// Case-sensitivity flags for a ``FileCaseSensitiveInfo`` value.
+  @frozen
+  public struct Flags: OptionSet, Sendable, Hashable, Codable {
+    /// The raw C bitmask.
+    @_alwaysEmitIntoClient
+    public var rawValue: UInt32
+
+    /// Creates case-sensitivity flags from a raw C bitmask.
+    @_alwaysEmitIntoClient
+    public init(rawValue: UInt32) { self.rawValue = rawValue }
+
+    /// The directory is case-sensitive.
+    ///
+    /// The corresponding C constant is `FILE_CS_FLAG_CASE_SENSITIVE_DIR`.
+    @_alwaysEmitIntoClient
+    public static var caseSensitiveDirectory: Flags { Flags(rawValue: 0x0000_0001) }
   }
 }
 

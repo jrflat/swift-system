@@ -55,4 +55,46 @@ public struct FileID128: RawRepresentable, Sendable, Hashable {
   }
 }
 
+@available(System 99, *)
+extension FileID128: Codable {
+  /// Creates a `FileID128` from an encoded array of its 16 identifier bytes.
+  @_alwaysEmitIntoClient
+  public init(from decoder: any Decoder) throws {
+    let bytes = try [UInt8](from: decoder)
+    let count = MemoryLayout<FILE_ID_128>.size
+    guard bytes.count == count else {
+      throw DecodingError.dataCorrupted(
+        DecodingError.Context(
+          codingPath: decoder.codingPath,
+          debugDescription: "FileID128 requires exactly \(count) bytes"))
+    }
+    var raw = FILE_ID_128()
+    withUnsafeMutableBytes(of: &raw) { $0.copyBytes(from: bytes) }
+    self.init(rawValue: raw)
+  }
+
+  @_alwaysEmitIntoClient
+  public func encode(to encoder: any Encoder) throws {
+    try withUnsafeBytes(of: rawValue) { try Array($0).encode(to: encoder) }
+  }
+}
+
+@available(System 99, *)
+extension FileID128: CustomStringConvertible {
+  /// The identifier bytes as a lowercase hexadecimal string, in the order
+  /// stored by the file system.
+  @inline(never)
+  public var description: String {
+    withUnsafeBytes(of: rawValue) { bytes in
+      var result = ""
+      result.reserveCapacity(2 * bytes.count)
+      for byte in bytes {
+        result += byte < 0x10 ? "0" : ""
+        result += String(byte, radix: 16)
+      }
+      return result
+    }
+  }
+}
+
 #endif // os(Windows)

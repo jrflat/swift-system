@@ -432,6 +432,11 @@ internal func _mapWindowsErrorToErrno(_ errorCode: DWORD) -> CInt {
     return ENOTEMPTY
   case ERROR_NO_UNICODE_TRANSLATION:
     return EILSEQ
+  case ERROR_MORE_DATA:
+    // POSIX convention for a caller-supplied buffer that was too small.
+    return _ERANGE
+  case ERROR_NOT_SUPPORTED:
+    return _ENOTSUP
   default:
     return EINVAL
   }

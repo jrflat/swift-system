@@ -23,9 +23,12 @@ import WinSDK
 /// The type requested with ``FileDescriptor/fileInformation(_:)``
 /// determines the info class that is fetched.
 ///
-/// - Note: This protocol is only for the *fixed-size* classes. Variable-length
-///   classes such as the file name (`FileNameInfo`) and directory enumeration
-///   classes require a growable buffer and are exposed through dedicated APIs.
+/// - Note: This protocol is only for the *fixed-size* classes, which are the
+///   ones whose C struct has a size to wrap. The classes whose struct ends in a
+///   flexible array member have dedicated APIs instead:
+///   ``FileDescriptor/fileName(normalized:)``,
+///   ``FileDescriptor/dataStreams()``, and
+///   ``FileDescriptor/withDirectoryEntries(_:bufferSize:_:)``.
 ///
 /// - Note: Only available on Windows.
 @available(System 99, *)
@@ -77,6 +80,18 @@ extension FileCompressionInfo: FileInfoByHandle {
   public static var infoClass: FileInfoClass { .compression }
 }
 
+@available(System 99, *)
+extension FileCaseSensitiveInfo: FileInfoByHandle {
+  @_alwaysEmitIntoClient
+  public static var infoClass: FileInfoClass { .caseSensitive }
+}
+
+@available(System 99, *)
+extension FileRemoteProtocolInfo: FileInfoByHandle {
+  @_alwaysEmitIntoClient
+  public static var infoClass: FileInfoClass { .remoteProtocol }
+}
+
 // MARK: - FileDescriptor API
 
 @available(System 99, *)
@@ -93,6 +108,15 @@ extension FileDescriptor {
   /// - Parameter type: The information struct type to retrieve.
   /// - Returns: The requested information.
   ///
+  /// - Precondition: This descriptor must not refer to a pipe.
+  ///
+  /// Not every information class applies to every handle: ``FileIDInfo``
+  /// requires a file system that reports identifiers,
+  /// ``FileRemoteProtocolInfo`` requires a remote file, and
+  /// ``FileCaseSensitiveInfo`` requires a directory. Windows rejects a class it
+  /// cannot serve, which surfaces here as ``Errno/invalidArgument`` or
+  /// ``Errno/notSupported`` depending on the file system.
+  ///
   /// The corresponding C function is `GetFileInformationByHandleEx`.
   @_alwaysEmitIntoClient
   public func fileInformation<Info: FileInfoByHandle>(
@@ -105,8 +129,6 @@ extension FileDescriptor {
   internal func _fileInformation<Info: FileInfoByHandle>(
     _ type: Info.Type
   ) -> Result<Info, Errno> {
-    // Allocate `stride` (not `size`) bytes; the kernel validates dwBufferSize
-    // against the C `sizeof(Info)`, which includes trailing padding.
     return withUnsafeTemporaryAllocation(
       byteCount: MemoryLayout<Info.RawValue>.stride,
       alignment: MemoryLayout<Info.RawValue>.alignment
@@ -125,6 +147,87 @@ extension FileDescriptor {
     }
   }
 
+  /// Retrieves file information of the given class into a buffer this function
+  /// owns, and passes it to `body`.
+  ///
+  /// This is the escape hatch for information classes that ``System`` does not
+  /// model. Every class it does model has a dedicated API, which you should
+  /// prefer:
+  ///
+  /// | Class                    | API                                       |
+  /// | ------------------------ | ----------------------------------------- |
+  /// | the fixed-size classes   | ``fileInformation(_:)``                   |
+  /// | ``FileInfoClass/name``   | ``fileName(normalized:)``                 |
+  /// | ``FileInfoClass/stream`` | ``dataStreams()``                         |
+  /// | the directory classes    | ``withDirectoryEntries(_:bufferSize:_:)`` |
+  ///
+  /// The buffer is allocated, aligned, zero-filled, and grown on
+  /// `ERROR_MORE_DATA` by this function, and released when it returns. It is
+  /// read-only and valid only for the duration of `body`; copy out anything that
+  /// needs to outlive the call.
+  ///
+  /// Interpreting the bytes is up to you, and is unsafe in the ways the modelled
+  /// APIs exist to avoid. In particular, the chained classes return a run of
+  /// variable-length records linked by a `NextEntryOffset` member that the file
+  /// system chooses, and using one to advance a pointer without first bounding
+  /// it against the buffer is an out-of-bounds read.
+  ///
+  /// - Parameters:
+  ///   - infoClass: The class of information to retrieve.
+  ///   - minimumCapacity: The size of the first attempt, in bytes.
+  ///   - maximumCapacity: The largest buffer to grow to before giving up with
+  ///     ``Errno/outOfRange``.
+  ///   - body: Receives the filled buffer. Note that only the bytes the file
+  ///     system wrote are meaningful; the rest are zero.
+  /// - Returns: Whatever `body` returns.
+  ///
+  /// - Precondition: This descriptor must not refer to a pipe.
+  ///
+  /// The corresponding C function is `GetFileInformationByHandleEx`.
+  @_alwaysEmitIntoClient
+  public func withUnsafeFileInformation<R>(
+    _ infoClass: FileInfoClass,
+    minimumCapacity: Int = 4096,
+    maximumCapacity: Int = 16 << 20,
+    _ body: (UnsafeRawBufferPointer) throws -> R
+  ) throws -> R {
+    try _withUnsafeFileInformation(
+      infoClass,
+      minimumCapacity: minimumCapacity,
+      maximumCapacity: maximumCapacity,
+      body)
+  }
+
+  @usableFromInline
+  internal func _withUnsafeFileInformation<R>(
+    _ infoClass: FileInfoClass,
+    minimumCapacity: Int,
+    maximumCapacity: Int,
+    _ body: (UnsafeRawBufferPointer) throws -> R
+  ) throws -> R {
+    let outcome = _withFileInformationBuffer(
+      fileDescriptor: self.rawValue,
+      infoClass: infoClass.rawValue,
+      initialCapacity: minimumCapacity,
+      maximumCapacity: maximumCapacity,
+      // The chained classes place 8-byte members at fixed offsets, so 8 is the
+      // alignment the file system needs regardless of the class requested.
+      alignment: 8,
+      // No class that reaches this API reports a required size.
+      capacityHint: { _ in 0 }
+    ) { buffer in
+      // `body`'s own error is carried out through the non-throwing driver.
+      Result { try body(buffer) }
+    }
+
+    switch outcome {
+    case .success(let value):
+      return try value.get()
+    case .failure(let error):
+      throw Errno(windowsError: error.code)
+    }
+  }
+
   /// Retrieves the name of the file referred to by this file descriptor.
   ///
   /// The returned path is the location of the file relative to the root of its
@@ -135,6 +238,11 @@ extension FileDescriptor {
   ///   (`FileNormalizedNameInfo`); when `false` (default), retrieves the
   ///   name as opened (`FileNameInfo`).
   /// - Returns: The file's name, as a path relative to its volume root.
+  ///
+  /// - Precondition: This descriptor must not refer to a pipe.
+  ///
+  /// - Note: Not every SMB server can produce a normalized name; requesting
+  ///   one for a file on such a share fails.
   ///
   /// The corresponding C function is `GetFileInformationByHandleEx` with the
   /// `FileNameInfo` or `FileNormalizedNameInfo` information class.
@@ -150,109 +258,43 @@ extension FileDescriptor {
     normalized: Bool
   ) -> Result<FilePath, Errno> {
     // FILE_NAME_INFO is variable-length: a DWORD FileNameLength (in bytes)
-    // followed by a WCHAR FileName[] array. Start with a stack-friendly guess
-    // and grow on ERROR_MORE_DATA, which signals the buffer was too small.
-    let infoClass = if normalized {
-      WinSDK.FileNormalizedNameInfo
-    } else {
-      WinSDK.FileNameInfo
-    }
+    // followed by a WCHAR FileName[] array.
+    let infoClass = normalized
+      ? FileInfoClass.normalizedName.rawValue
+      : FileInfoClass.name.rawValue
 
     let headerSize = MemoryLayout<FILE_NAME_INFO>.offset(of: \.FileName)!
-    let initialCapacity = headerSize + Int(MAX_PATH) * MemoryLayout<WCHAR>.stride
+    let unitSize = MemoryLayout<WCHAR>.stride
 
-    enum Attempt {
-      case done(Result<FilePath, Errno>)
-      case grow(nextCapacity: Int)
-    }
-
-    func attempt(
-      into buffer: UnsafeMutableRawBufferPointer
-    ) -> Attempt {
-      buffer.initializeMemory(as: UInt8.self, repeating: 0)
-
-      let err = system_getFileInformationByHandleEx_error(
-        self.rawValue, infoClass, buffer)
-
-      let reportedLength = Int(buffer.loadUnaligned(
-        fromByteOffset: 0, as: DWORD.self))
-
-      if err == ERROR_MORE_DATA {
-        // FileNameLength should hold the required length, but grow dynamically
-        // and take the max so a driver that under-reports can't stall progress.
-        return .grow(nextCapacity: Swift.max(headerSize + reportedLength, buffer.count * 2))
+    let result = _withFileInformationBuffer(
+      fileDescriptor: self.rawValue,
+      infoClass: infoClass,
+      // A stack-friendly guess that serves nearly every path.
+      initialCapacity: headerSize + Int(MAX_PATH) * unitSize,
+      // Windows bounds a path at 32767 code units, so a request past that is a
+      // misbehaving file system rather than a buffer that needs growing.
+      maximumCapacity: headerSize + _maximumWidePathLength * unitSize,
+      alignment: MemoryLayout<FILE_NAME_INFO>.alignment,
+      // FileNameLength holds the required length even when the buffer was too
+      // small, so the retry can size itself in one step.
+      capacityHint: { buffer in
+        headerSize
+          + Int(buffer.loadUnaligned(fromByteOffset: 0, as: DWORD.self))
       }
-      guard err == ERROR_SUCCESS else {
-        return .done(.failure(Errno(windowsError: err)))
-      }
-
-      let name = _decodeWideName(
-        base: buffer.baseAddress!.advanced(by: headerSize),
-        byteCount: reportedLength)
-      return .done(.success(name))
+    ) { buffer -> FilePath in
+      guard let base = buffer.baseAddress else { return FilePath() }
+      let reportedLength = Int(
+        buffer.loadUnaligned(fromByteOffset: 0, as: DWORD.self))
+      // Clamp: success means the name fit, but the length still arrives from
+      // the file system and is not trusted to bound a read.
+      return _decodeWideName(
+        base: base.advanced(by: headerSize),
+        byteCount: Swift.min(
+          reportedLength, Swift.max(0, buffer.count - headerSize)))
     }
 
-    var capacity = initialCapacity
-    let first = withUnsafeTemporaryAllocation(
-      byteCount: initialCapacity,
-      alignment: MemoryLayout<FILE_NAME_INFO>.alignment
-    ) { buffer in
-      attempt(into: buffer)
-    }
-    switch first {
-    case .done(let result):
-      return result
-    case .grow(let nextCapacity):
-      capacity = nextCapacity
-    }
-
-    while true {
-      let buffer = UnsafeMutableRawBufferPointer.allocate(
-        byteCount: capacity, alignment: MemoryLayout<FILE_NAME_INFO>.alignment)
-      defer { buffer.deallocate() }
-
-      switch attempt(into: buffer) {
-      case .done(let result):
-        return result
-      case .grow(let nextCapacity):
-        capacity = nextCapacity
-      }
-    }
+    return result.mapError { Errno(windowsError: $0.code) }
   }
-}
-
-/// Decodes a run of `WCHAR` (UTF-16 code units) into a ``FilePath``.
-///
-/// The code units are copied verbatim into the path's storage. Note that
-/// ill-formed UTF-16 (e.g. unpaired surrogates that Windows permits in
-/// file names) is preserved.
-///
-/// - Parameters:
-///   - base: A pointer to the first UTF-16 code unit.
-///   - byteCount: The length of the name in bytes (as reported by the file
-///     system), i.e. twice the number of code units.
-@available(System 99, *)
-@usableFromInline
-internal func _decodeWideName(
-  base: UnsafeRawPointer, byteCount: Int
-) -> FilePath {
-  let unitCount = byteCount / MemoryLayout<WCHAR>.stride
-  guard unitCount > 0 else { return FilePath() }
-  // The kernel does not null-terminate the name, so append a NUL for
-  // `SystemString`'s null-terminated storage.
-  let storage = Array<SystemChar>(
-    unsafeUninitializedCapacity: unitCount + 1
-  ) { buffer, initialized in
-    for i in 0..<unitCount {
-      let unit = base.loadUnaligned(
-        fromByteOffset: i * MemoryLayout<WCHAR>.stride,
-        as: CInterop.PlatformChar.self)
-      buffer[i] = SystemChar(rawValue: unit)
-    }
-    buffer[unitCount] = .null
-    initialized = unitCount + 1
-  }
-  return FilePath(SystemString(nullTerminated: storage))
 }
 
 #endif // os(Windows)

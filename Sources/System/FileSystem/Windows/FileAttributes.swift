@@ -64,6 +64,22 @@ public struct FileAttributes: OptionSet, Sendable, Hashable, Codable {
     FileAttributes(rawValue: DWORD(WinSDK.FILE_ATTRIBUTE_DIRECTORY))
   }
 
+  /// Reserved for system use.
+  ///
+  /// The corresponding C constant is `FILE_ATTRIBUTE_DEVICE`.
+  @_alwaysEmitIntoClient
+  public static var device: FileAttributes {
+    FileAttributes(rawValue: DWORD(FILE_ATTRIBUTE_DEVICE))
+  }
+
+  /// Reserved for system use.
+  ///
+  /// The corresponding C constant is `FILE_ATTRIBUTE_VIRTUAL`.
+  @_alwaysEmitIntoClient
+  public static var virtual: FileAttributes {
+    FileAttributes(rawValue: DWORD(FILE_ATTRIBUTE_VIRTUAL))
+  }
+
   /// The file should be archived. Applications use this attribute to mark
   /// files for backup or removal.
   ///
@@ -175,6 +191,16 @@ public struct FileAttributes: OptionSet, Sendable, Hashable, Codable {
     FileAttributes(rawValue: DWORD(FILE_ATTRIBUTE_UNPINNED))
   }
 
+  /// The file or directory has no physical representation locally; opening it
+  /// will fetch content from a remote store.
+  ///
+  /// The corresponding C constant is `FILE_ATTRIBUTE_RECALL_ON_OPEN`, which
+  /// shares its value with the legacy `FILE_ATTRIBUTE_EA`.
+  @_alwaysEmitIntoClient
+  public static var recallOnOpen: FileAttributes {
+    FileAttributes(rawValue: DWORD(FILE_ATTRIBUTE_RECALL_ON_OPEN))
+  }
+
   /// The file or directory is not fully present locally. Reading the file or
   /// enumerating the directory will be more expensive than normal, as it will
   /// cause at least some of the content to be fetched from a remote store.
@@ -196,6 +222,7 @@ extension FileAttributes: CustomStringConvertible {
       (.hidden, ".hidden"),
       (.system, ".system"),
       (.directory, ".directory"),
+      (.device, ".device"),
       (.archive, ".archive"),
       (.normal, ".normal"),
       (.temporary, ".temporary"),
@@ -206,7 +233,9 @@ extension FileAttributes: CustomStringConvertible {
       (.notContentIndexed, ".notContentIndexed"),
       (.encrypted, ".encrypted"),
       (.integrityStream, ".integrityStream"),
+      (.virtual, ".virtual"),
       (.noScrubData, ".noScrubData"),
+      (.recallOnOpen, ".recallOnOpen"),
       (.pinned, ".pinned"),
       (.unpinned, ".unpinned"),
       (.recallOnDataAccess, ".recallOnDataAccess"),

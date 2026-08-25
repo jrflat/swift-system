@@ -43,11 +43,17 @@ target_sources(SystemPackage PRIVATE
   FileSystem/Identifiers.swift
   FileSystem/Stat.swift)
 target_sources(SystemPackage PRIVATE
+  FileSystem/Windows/CompressionFormat.swift
+  FileSystem/Windows/DirectoryEntries.swift
   FileSystem/Windows/FileAttributes.swift
   FileSystem/Windows/FileID128.swift
+  FileSystem/Windows/FileInfoBuffer.swift
   FileSystem/Windows/FileInfoClass.swift
+  FileSystem/Windows/FileRemoteProtocolInfo.swift
+  FileSystem/Windows/FileStreamInfo.swift
   FileSystem/Windows/FileTime.swift
-  FileSystem/Windows/GetFileInformationByHandleEx.swift)
+  FileSystem/Windows/GetFileInformationByHandleEx.swift
+  FileSystem/Windows/ReparseTag.swift)
 if(CMAKE_SYSTEM_NAME STREQUAL Linux)
   target_sources(SystemPackage PRIVATE
     IORing/IOCompletion.swift

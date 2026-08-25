@@ -117,11 +117,6 @@ internal var ERROR_HANDLE_EOF: DWORD {
 }
 
 @_transparent
-internal var ERROR_MORE_DATA: DWORD {
-  DWORD(WinSDK.ERROR_MORE_DATA)
-}
-
-@_transparent
 internal var ERROR_FAIL_I24: DWORD {
   DWORD(WinSDK.ERROR_FAIL_I24)
 }
@@ -217,6 +212,11 @@ internal var ERROR_MAX_THRDS_REACHED: DWORD {
 }
 
 @_transparent
+internal var ERROR_MORE_DATA: DWORD {
+  DWORD(WinSDK.ERROR_MORE_DATA)
+}
+
+@_transparent
 internal var ERROR_NESTING_NOT_ALLOWED: DWORD {
   DWORD(WinSDK.ERROR_NESTING_NOT_ALLOWED)
 }
@@ -244,6 +244,11 @@ internal var ERROR_NOT_LOCKED: DWORD {
 @_transparent
 internal var ERROR_NOT_SAME_DEVICE: DWORD {
   DWORD(WinSDK.ERROR_NOT_SAME_DEVICE)
+}
+
+@_transparent
+internal var ERROR_NOT_SUPPORTED: DWORD {
+  DWORD(WinSDK.ERROR_NOT_SUPPORTED)
 }
 
 @_transparent

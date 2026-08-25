@@ -71,7 +71,11 @@ public struct FileTime: RawRepresentable, Sendable, Hashable, Codable {
   /// This is convenient for bridging to POSIX-style time values.
   @_alwaysEmitIntoClient
   public var secondsSinceUnixEpoch: Int64 {
-    (rawValue - Self._ticksBetweenEpochs) / Self._ticksPerSecond
+    // Saturate rather than trap: `rawValue` is the signed reading of an
+    // unsigned FILETIME, so it can hold values no real timestamp produces.
+    let (ticks, overflow) = rawValue.subtractingReportingOverflow(
+      Self._ticksBetweenEpochs)
+    return overflow ? .min : ticks / Self._ticksPerSecond
   }
 }
 
