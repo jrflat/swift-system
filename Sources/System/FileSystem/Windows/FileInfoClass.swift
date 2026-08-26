@@ -676,8 +676,12 @@ public struct FileCompressionInfo: RawRepresentable, Sendable {
 /// The per-directory case-sensitivity state of a directory.
 ///
 /// This is a Swift wrapper of the C `FILE_CASE_SENSITIVE_INFO` struct,
-/// retrieved by ``FileDescriptor/fileInformation(_:)``. It requires a
-/// directory handle.
+/// retrieved by ``FileDescriptor/fileInformation(_:)``.
+///
+/// The result is only meaningful for a directory handle. Windows is not
+/// consistent about what it does with a file handle: some builds reject the
+/// request, and others answer it with no flags set. Neither tells you anything
+/// about the file.
 ///
 /// - Note: Only available on Windows.
 @frozen

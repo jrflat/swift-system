@@ -113,9 +113,12 @@ extension FileDescriptor {
   /// Not every information class applies to every handle: ``FileIDInfo``
   /// requires a file system that reports identifiers,
   /// ``FileRemoteProtocolInfo`` requires a remote file, and
-  /// ``FileCaseSensitiveInfo`` requires a directory. Windows rejects a class it
-  /// cannot serve, which surfaces here as ``Errno/invalidArgument`` or
-  /// ``Errno/notSupported`` depending on the file system.
+  /// ``FileCaseSensitiveInfo`` is only meaningful for a directory. Windows
+  /// generally rejects a class it cannot serve, which surfaces here as
+  /// ``Errno/invalidArgument`` or ``Errno/notSupported`` depending on the file
+  /// system — but not always: ``FileCaseSensitiveInfo`` for a file succeeds on
+  /// some builds, reporting no flags. A successful result does not by itself
+  /// mean the class applied to the handle.
   ///
   /// The corresponding C function is `GetFileInformationByHandleEx`.
   @_alwaysEmitIntoClient

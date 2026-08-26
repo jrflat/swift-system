@@ -214,11 +214,32 @@ private struct GetFileInformationByHandleExTests {
   }
 
   @available(System 99, *)
-  @Test func caseSensitiveInfoOnFileFails() async throws {
+  @Test func caseSensitiveInfoOnFileReportsNothing() async throws {
     try withTemporaryFile(basename: "caseSensitive") { fd, _ in
-      // The class describes a directory; a file handle is rejected.
-      #expect(throws: (any Error).self) {
-        try fd.fileInformation(FileCaseSensitiveInfo.self)
+      // The class describes a directory, and Windows is inconsistent about what
+      // it does with a file handle: some builds reject the request, others
+      // answer it with no flags set. Both are acceptable. Reporting a *file* as
+      // case-sensitive would not be.
+      if let info = try? fd.fileInformation(FileCaseSensitiveInfo.self) {
+        #expect(!info.isCaseSensitive)
+        #expect(info.flags.isEmpty)
+      }
+    }
+  }
+
+  @available(System 99, *)
+  @Test func caseSensitiveInfoOnDirectory() async throws {
+    try withTemporaryFilePath(basename: "caseSensitiveDir") { dir in
+      try withDirectoryDescriptor(at: dir) { fd in
+        do {
+          // A directory is case-insensitive unless per-directory case
+          // sensitivity was turned on for it, which this one has not been.
+          let info = try fd.fileInformation(FileCaseSensitiveInfo.self)
+          #expect(!info.isCaseSensitive)
+          #expect(!info.flags.contains(.caseSensitiveDirectory))
+        } catch Errno.notSupported {
+          // The volume does not implement per-directory case sensitivity.
+        }
       }
     }
   }
