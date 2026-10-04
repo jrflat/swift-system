@@ -260,6 +260,34 @@ final class IORingTests: XCTestCase {
         rawBuffer.deallocate()
     }
 
+    func testBlockingConsumeCompletionsCountsCompletionsAlreadyInRing() throws {
+        try XCTSkipIf(!uringEnabled, failureMessage)
+        var ring = try IORing(queueDepth: 4)
+        try XCTSkipIf(
+            !ring.supportedFeatures.contains(.extendedArguments),
+            "Kernel < 5.11: timeouts in io_uring_enter aren't supported."
+        )
+        let timer = FileDescriptor(rawValue: timerfd_create(CLOCK_MONOTONIC, 0))
+        defer { try? timer.close() }
+        XCTAssertTrue(try ring.submit(linkedRequests: .nop()))
+        XCTAssertTrue(try ring.submit(linkedRequests:
+            .pollAdd(timer, events: .readable, isMultiShot: false, context: 1)))
+        var delay = itimerspec()
+        delay.it_value.tv_nsec = 50_000_000
+        XCTAssertEqual(timerfd_settime(timer.rawValue, 0, &delay, nil), 0)
+
+        let timeout = Duration.seconds(2)
+        let clock = ContinuousClock()
+        let start = clock.now
+        var completions = 0
+        ring.blockingConsumeCompletions(minimumCount: 2, timeout: timeout) {
+            (completion: consuming IORing.Completion?, _, _) in
+            if completion != nil { completions += 1 }
+        }
+        XCTAssertEqual(completions, 2)
+        XCTAssertLessThan(start.duration(to: clock.now), timeout / 2)
+    }
+
     // Timeout test for `blockingConsumeCompletion(timeout:)`:
     func testBlockingConsumeCompletionWithTimeoutOnIdleRing() throws {
         try XCTSkipIf(!uringEnabled, failureMessage)

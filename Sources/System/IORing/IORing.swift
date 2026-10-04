@@ -542,7 +542,7 @@ public struct IORing: ~Copyable {
                     _ = try _ioUringEnter2(
                         ringDescriptor: ringDescriptor,
                         toSubmit: 0,
-                        minComplete: minimumCount,
+                        minComplete: minimumCount - UInt32(count),
                         flags: flags,
                         args: extraArgs,
                         argsSize: sz
